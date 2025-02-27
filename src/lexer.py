@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-# Token types for numbers and arithmetic operators
+# Existing token types...
 INTEGER    = 'INTEGER'
 FLOAT      = 'FLOAT'
 PLUS       = 'PLUS'
@@ -14,31 +14,40 @@ REM        = 'REM'
 QUOT       = 'QUOT'
 LPAREN     = 'LPAREN'
 RPAREN     = 'RPAREN'
-EQUALS     = 'EQUALS'   # Used only in 'let' declarations
-
-# Assignment keywords
+EQUALS     = 'EQUALS'
 LET        = 'LET'
-ASSIGN     = 'ASSIGN'   # For reassigning an existing variable
-
-# Identifier and booleans
+ASSIGN     = 'ASSIGN'
 IDENTIFIER = 'IDENTIFIER'
 TRUE       = 'TRUE'
 FALSE      = 'FALSE'
-
-# Comparison operators
 LT         = 'LT'
 GT         = 'GT'
 LTE        = 'LTE'
 GTE        = 'GTE'
 EQEQ       = 'EQEQ'
 NOTEQ      = 'NOTEQ'
-
-# Logical operators
 AND        = 'AND'
 OR         = 'OR'
 NOT        = 'NOT'
-
 EOF        = 'EOF'
+IF         = 'IF'
+ELSE       = 'ELSE'
+WHILE      = 'WHILE'
+LBRACE     = 'LBRACE'
+RBRACE     = 'RBRACE'
+
+# New tokens for for loop
+FOR        = 'FOR'
+TO         = 'TO'
+READ       = 'READ'
+PRINT      = 'PRINT'
+
+# New tokens for function defnition
+FUNC     = 'FUNC'       
+RETURN   = 'RETURN'    
+COMMA    = 'COMMA' 
+SEMICOLON = 'SEMICOLON'     
+
 
 @dataclass
 class Token:
@@ -55,7 +64,6 @@ class Lexer:
         raise Exception('Invalid character')
 
     def advance(self):
-        """Advance the position pointer and set the current_char."""
         self.pos += 1
         if self.pos > len(self.text) - 1:
             self.current_char = None
@@ -63,19 +71,16 @@ class Lexer:
             self.current_char = self.text[self.pos]
 
     def peek(self):
-        """Peek at the next character without advancing."""
         peek_pos = self.pos + 1
         if peek_pos > len(self.text) - 1:
             return None
-        else:
-            return self.text[peek_pos]
+        return self.text[peek_pos]
 
     def skip_whitespace(self):
         while self.current_char and self.current_char.isspace():
             self.advance()
 
     def number(self):
-        """Return a number token (integer or float)."""
         result = ''
         while self.current_char and self.current_char.isdigit():
             result += self.current_char
@@ -90,13 +95,15 @@ class Lexer:
         return Token(INTEGER, int(result))
 
     def identifier(self):
-        """Handle identifiers and reserved keywords."""
         result = ''
         while self.current_char and (self.current_char.isalnum() or self.current_char == '_'):
             result += self.current_char
             self.advance()
-        # Reserved keywords:
-        if result == 'let':
+        if result == 'func':
+            return Token(FUNC, result)
+        elif result == 'return':
+            return Token(RETURN,result)
+        elif result == 'let':
             return Token(LET, result)
         elif result == 'assign':
             return Token(ASSIGN, result)
@@ -114,22 +121,32 @@ class Lexer:
             return Token(OR, result)
         elif result == 'not':
             return Token(NOT, result)
+        elif result == 'if':
+            return Token(IF, result)
+        elif result == 'else':
+            return Token(ELSE, result)
+        elif result == 'while':
+            return Token(WHILE, result)
+        elif result == 'for':
+            return Token(FOR, result)
+        elif result == 'to':
+            return Token(TO, result)
+        elif result == 'read':
+            return Token(READ, result)
+        elif result == 'print':
+            return Token(PRINT, result)
         else:
             return Token(IDENTIFIER, result)
 
     def get_next_token(self):
-        """Lexical analyzer (tokenizer) for the language."""
         while self.current_char:
             if self.current_char.isspace():
                 self.skip_whitespace()
                 continue
-
             if self.current_char.isdigit():
                 return self.number()
-
             if self.current_char.isalpha():
                 return self.identifier()
-
             if self.current_char == '+':
                 self.advance()
                 return Token(PLUS, '+')
@@ -151,6 +168,12 @@ class Lexer:
             if self.current_char == ')':
                 self.advance()
                 return Token(RPAREN, ')')
+            if self.current_char == '{':
+                self.advance()
+                return Token(LBRACE, '{')
+            if self.current_char == '}':
+                self.advance()
+                return Token(RBRACE, '}')
             if self.current_char == '<':
                 self.advance()
                 if self.current_char == '=':
@@ -175,15 +198,13 @@ class Lexer:
                     self.advance()
                     return Token(NOTEQ, '!=')
                 self.error()
+            if self.current_char == ',':
+                self.advance()
+                return Token(COMMA, ',')
+            if self.current_char == ';':
+                self.advance()
+                return Token(SEMICOLON, ';')
 
             self.error()
-        return Token(EOF, None)
 
-if __name__ == '__main__':
-    # Example: Print tokens for a sample input
-    text = "let x = 10\nx assign 20\n10 < 20 and not False"
-    lexer = Lexer(text)
-    token = lexer.get_next_token()
-    while token.type != EOF:
-        print(token)
-        token = lexer.get_next_token()
+        return Token(EOF, None)
