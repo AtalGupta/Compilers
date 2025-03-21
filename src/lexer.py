@@ -35,12 +35,17 @@ ELSE       = 'ELSE'
 WHILE      = 'WHILE'
 LBRACE     = 'LBRACE'
 RBRACE     = 'RBRACE'
+COMMA      = 'COMMA'
 
 # New tokens for for loop
 FOR        = 'FOR'
 TO         = 'TO'
 READ       = 'READ'
 PRINT      = 'PRINT'
+FUNC       = 'FUNC'
+STRING     = 'STRING'
+RETURN     = 'RETURN'
+
 
 @dataclass
 class Token:
@@ -72,6 +77,29 @@ class Lexer:
     def skip_whitespace(self):
         while self.current_char and self.current_char.isspace():
             self.advance()
+    
+    def skip_comment(self):
+        if self.current_char == '/' and self.peek() == '/':
+            while self.current_char and self.current_char != '\n':
+                self.advance()
+        elif self.current_char == '/' and self.peek() == '*':
+            self.advance()  # Skip '*'
+            self.advance()  # Skip '/'
+            while self.current_char and not (self.current_char == '*' and self.peek() == '/'):
+                self.advance()
+            self.advance()
+            self.advance()
+    
+    def string(self):
+        result = ''
+        self.advance()
+        while self.current_char and self.current_char != '"':
+            result += self.current_char
+            self.advance()
+        self.advance()
+        return Token(STRING, result)
+    
+
 
     def number(self):
         result = ''
@@ -124,6 +152,10 @@ class Lexer:
             return Token(READ, result)
         elif result == 'print':
             return Token(PRINT, result)
+        elif result == 'func':
+            return Token(FUNC, result)
+        elif result == 'return':
+            return Token(RETURN, result)
         else:
             return Token(IDENTIFIER, result)
 
@@ -136,6 +168,11 @@ class Lexer:
                 return self.number()
             if self.current_char.isalpha():
                 return self.identifier()
+            if self.current_char == '/' and self.peek() in ['/','*']:
+                self.skip_comment()
+                continue
+            if self.current_char == '"':
+                return self.string()
             if self.current_char == '+':
                 self.advance()
                 return Token(PLUS, '+')
@@ -151,6 +188,9 @@ class Lexer:
             if self.current_char == '/':
                 self.advance()
                 return Token(DIVIDE, '/')
+            if self.current_char == ',':
+                self.advance()
+                return Token(COMMA, ',')
             if self.current_char == '(':
                 self.advance()
                 return Token(LPAREN, '(')
