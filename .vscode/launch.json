@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Evaluator",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/evaluator.py",
+            "args": ["${workspaceFolder}/tests/sample_test.og"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
