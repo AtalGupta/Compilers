@@ -2,9 +2,9 @@
 from lexer import (Lexer, Token, LET, ASSIGN, IDENTIFIER, EQUALS, TRUE, FALSE,
                    PLUS, MINUS, MULTIPLY, DIVIDE, EXPONENT, REM, QUOT, LPAREN, RPAREN,
                    LT, LTE, GT, GTE, EQEQ, NOTEQ, AND, OR, NOT, EOF, INTEGER, FLOAT,
-                   IF, ELSE, WHILE, LBRACE, RBRACE, FOR, TO, READ, PRINT)
+                   IF, ELSE, WHILE, LBRACE, RBRACE, FOR, TO, READ, PRINT,COMMA,FUNC,RETURN,STRING)
 from ast_1 import (AST, BinOp, Number, UnaryOp, Boolean, Var, VarAssign, VarReassign,
-                   Block, If, While, For, Read, Print, print_ast)
+                   Block, If, While, For, Read, Print, print_ast,FuncCall,FuncDef,Return,String)
 
 class Parser:
     def __init__(self, lexer: Lexer):
@@ -25,18 +25,23 @@ class Parser:
         statements = []
         self.eat(LBRACE)
         while self.current_token.type != RBRACE and self.current_token.type != EOF:
-            statements.append(self.statement())
+            if self.current_token.type == RETURN:  # Handle return inside function bodies
+                statements.append(self.return_statement())
+            else:
+                statements.append(self.statement())
         self.eat(RBRACE)
         return Block(statements)
 
     def statement(self) -> AST:
         """Parses a single statement: let, if, while, for, read, print, or assignment"""
-        if self.current_token.type == LET:
-            return self.let_statement()
-        elif self.current_token.type == IF:
+        if self.current_token.type == IF:
             return self.if_statement()
+        elif self.current_token.type == LET:
+            return self.let_statement()
         elif self.current_token.type == WHILE:
             return self.while_statement()
+        elif self.current_token.type == FUNC:
+            return self.function_definition()
         elif self.current_token.type == FOR:
             return self.for_statement()
         elif self.current_token.type == READ:
@@ -49,7 +54,18 @@ class Parser:
         elif self.current_token.type == PRINT:
             self.eat(PRINT)
             expr = self.assignment()
-            return Print(expr)
+            return Print(expr) 
+        elif self.current_token.type == IDENTIFIER:
+            var_name = self.current_token.value
+            self.eat(IDENTIFIER)
+            if self.current_token.type == LPAREN:
+                return self.function_call(var_name)  # Recognize function calls properly
+            elif self.current_token.type == ASSIGN:
+                self.eat(ASSIGN)
+                expr_node = self.assignment()
+                return VarReassign(var_name, expr_node)
+            else:
+                self.error()
         else:
             return self.assignment()
     
@@ -92,6 +108,48 @@ class Parser:
         end = self.assignment()
         body = self.block()
         return For(var_name, start, end, body)
+    
+    def function_definition(self) -> AST:
+        """Parses function definitions: func name(params) { body }"""
+        self.eat(FUNC)
+        
+        if self.current_token.type != IDENTIFIER:
+            self.error()
+        func_name = self.current_token.value
+        self.eat(IDENTIFIER)
+
+        self.eat(LPAREN)
+        params = []
+        if self.current_token.type == IDENTIFIER:
+            params.append(self.current_token.value)
+            self.eat(IDENTIFIER)
+            while self.current_token.type == COMMA:
+                self.eat(COMMA)
+                params.append(self.current_token.value)
+                self.eat(IDENTIFIER)
+        self.eat(RPAREN)
+
+        body = self.block()
+        return FuncDef(func_name, params, body)
+
+    def return_statement(self) -> AST:
+        """Parses return statements"""
+        self.eat(RETURN)
+        return Return(self.assignment())
+    
+    def function_call(self, name: str) -> AST:
+        """Parses function calls: name(args)"""
+        self.eat(LPAREN)
+        args = []
+        if self.current_token.type != RPAREN:  # Ensure we allow empty argument lists
+            while True:
+                args.append(self.assignment())  # Correctly parse expressions as arguments
+                if self.current_token.type != COMMA:
+                    break
+                self.eat(COMMA)
+        self.eat(RPAREN)
+        return FuncCall(name, args)
+
 
     def assignment(self) -> AST:
         node = self.logical_or()
@@ -159,6 +217,7 @@ class Parser:
 
     def factor(self) -> AST:
         token = self.current_token
+        print(f"Parsing factor: {token.type}, value: {token.value}")
         if token.type in (PLUS, MINUS):
             self.eat(token.type)
             return UnaryOp(token.value, self.factor())
@@ -168,6 +227,10 @@ class Parser:
         elif token.type == FLOAT:
             self.eat(FLOAT)
             return Number(token.value)
+        elif token.type == STRING:
+            string_value = token.value 
+            self.eat(STRING)
+            return String(string_value) 
         elif token.type == TRUE:
             self.eat(TRUE)
             return Boolean(True)
@@ -175,8 +238,11 @@ class Parser:
             self.eat(FALSE)
             return Boolean(False)
         elif token.type == IDENTIFIER:
+            var_name = token.value
             self.eat(IDENTIFIER)
-            return Var(token.value)
+            if self.current_token.type == LPAREN:
+                return self.function_call(var_name)  # Handle function calls correctly
+            return Var(var_name)  # Otherwise, it's a regular variable
         elif token.type == LPAREN:
             self.eat(LPAREN)
             node = self.assignment()
@@ -188,8 +254,10 @@ class Parser:
         else:
             self.error()
 
+
     def parse(self) -> Block:
         statements = []
         while self.current_token.type != EOF:
             statements.append(self.statement())
+        print(statements)
         return Block(statements)

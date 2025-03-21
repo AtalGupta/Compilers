@@ -53,6 +53,11 @@ class Block(AST):
     statements: List[AST]
 
 @dataclass
+class String(AST):
+    """Represents a string literal in the AST"""
+    value: str
+
+@dataclass
 class If(AST):
     """If statement node"""
     condition: AST
@@ -77,6 +82,24 @@ class For(AST):
 class Read(AST):
     """Read input into a variable"""
     target: str       # Variable to store input
+
+@dataclass
+class FuncDef(AST):
+    """Function definition node"""
+    name: str
+    params: List[str]
+    body: AST
+
+@dataclass
+class Return(AST):
+    """Return statement node"""
+    expr: AST
+
+@dataclass
+class FuncCall(AST):
+    """Function call node"""
+    name: str
+    args: List[AST]
 
 @dataclass
 class Print(AST):
@@ -136,4 +159,12 @@ def print_ast(node: AST, level: int = 0) -> None:
         print(f"{indent}Read({node.target})")
     elif isinstance(node, Print):
         print(f"{indent}Print")
+        print_ast(node.expr, level + 1)
+    elif isinstance(node, FuncDef):
+        print(f"{indent}FuncDef({node.name})")
+        print(f"{indent}  Params: {node.params}")
+        print(f"{indent}  Body:")
+        print_ast(node.body, level + 1)
+    elif isinstance(node, Return):
+        print(f"{indent}Return")
         print_ast(node.expr, level + 1)
