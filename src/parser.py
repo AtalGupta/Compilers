@@ -2,9 +2,9 @@
 from lexer import (Lexer, Token, LET, ASSIGN, IDENTIFIER, EQUALS, TRUE, FALSE,
                    PLUS, MINUS, MULTIPLY, DIVIDE, EXPONENT, REM, QUOT, LPAREN, RPAREN,
                    LT, LTE, GT, GTE, EQEQ, NOTEQ, AND, OR, NOT, EOF, INTEGER, FLOAT,
-                   IF, ELSE, WHILE, LBRACE, RBRACE, FOR, TO, READ, PRINT,COMMA,FUNC,RETURN,STRING)
+                   IF, ELSE, WHILE, LBRACE, RBRACE, FOR, TO, READ, PRINT,COMMA,FUNC,RETURN,STRING,LBRACKET,RBRACKET)
 from ast_1 import (AST, BinOp, Number, UnaryOp, Boolean, Var, VarAssign, VarReassign,
-                   Block, If, While, For, Read, Print, print_ast,FuncCall,FuncDef,Return,String)
+                   Block, If, While, For, Read, Print, print_ast,FuncCall,FuncDef,Return,String,Array,ArrayAccess,ArrayAssign)
 
 class Parser:
     def __init__(self, lexer: Lexer):
@@ -34,6 +34,7 @@ class Parser:
 
     def statement(self) -> AST:
         """Parses a single statement: let, if, while, for, read, print, or assignment"""
+        print(f"Parsing statement: {self.current_token.type,self.current_token.value }")
         if self.current_token.type == IF:
             return self.if_statement()
         elif self.current_token.type == LET:
@@ -59,7 +60,14 @@ class Parser:
             var_name = self.current_token.value
             self.eat(IDENTIFIER)
             if self.current_token.type == LPAREN:
-                return self.function_call(var_name)  # Recognize function calls properly
+                return self.function_call(var_name) 
+            elif self.current_token.type == LBRACKET:
+                node = self.array_access(var_name)  # Parse `arr[index]`
+                if self.current_token.type == ASSIGN:  # Check if it is an assignment
+                    self.eat(ASSIGN)
+                    value = self.assignment()
+                    return ArrayAssign(node.array, node.index, value)  # Create ArrayAssign AST Node
+                return node  # Just an access, not an assignment
             elif self.current_token.type == ASSIGN:
                 self.eat(ASSIGN)
                 expr_node = self.assignment()
@@ -76,7 +84,10 @@ class Parser:
         var_name = self.current_token.value
         self.eat(IDENTIFIER)
         self.eat(EQUALS)
-        expr_node = self.assignment()
+        if self.current_token.type == LBRACKET:
+            expr_node = self.array_literal() 
+        else:
+            expr_node = self.assignment()
         return VarAssign(var_name, expr_node)
 
     def if_statement(self) -> AST:
@@ -149,12 +160,36 @@ class Parser:
                 self.eat(COMMA)
         self.eat(RPAREN)
         return FuncCall(name, args)
+    
+    def array_literal(self):
+        elements = []
+        self.eat(LBRACKET)
+        
+        if self.current_token.type != RBRACKET:  
+            elements.append(self.assignment())
+            while self.current_token.type == COMMA:
+                self.eat(COMMA)
+                elements.append(self.assignment())
+
+        self.eat(RBRACKET)
+        return Array(elements)
+
+    
+    def array_access(self, var_name):
+        self.eat(LBRACKET)
+        index = self.assignment()
+        self.eat(RBRACKET)
+        return ArrayAccess(var_name, index)
+
+
 
 
     def assignment(self) -> AST:
         node = self.logical_or()
         if self.current_token.type == ASSIGN:
-            if not isinstance(node, Var):
+            if isinstance(node, ArrayAccess):  # Handle arr[index] assign value
+                return ArrayAssign(node.array, node.index, self.assignment())
+            elif not isinstance(node, Var):
                 self.error()
             self.eat(ASSIGN)
             node = VarReassign(name=node.name, value=self.assignment())
@@ -237,12 +272,17 @@ class Parser:
         elif token.type == FALSE:
             self.eat(FALSE)
             return Boolean(False)
+        elif token.type == LBRACKET:
+            return self.array_literal()
         elif token.type == IDENTIFIER:
             var_name = token.value
             self.eat(IDENTIFIER)
-            if self.current_token.type == LPAREN:
-                return self.function_call(var_name)  # Handle function calls correctly
-            return Var(var_name)  # Otherwise, it's a regular variable
+            if self.current_token.type == LBRACKET:  
+                return self.array_access(var_name)
+            elif self.current_token.type == LPAREN:  # Function call only if no brackets
+                return self.function_call(var_name)
+
+            return Var(var_name)  
         elif token.type == LPAREN:
             self.eat(LPAREN)
             node = self.assignment()
