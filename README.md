@@ -149,6 +149,20 @@ Our compiler includes robust error handling:
 
 ---
 
+### Arrays
+Arrays are collections of elements of the same type.
+#### **Declaring Arrays**
+```plaintext
+let arr = [1, 2, 3, 4]
+```
+#### **Accessing Elements**
+```plaintext
+let x = arr[1]  # Gets the second element (indexing starts at 0)
+```
+#### **Modifying Elements**
+```plaintext
+arr[2] assign 10  # Changes third element to 10
+```
 
 
 ### ✅ **Feel free to contribute and improve this project!** 🚀
