@@ -2,7 +2,7 @@ from lexer import Lexer
 from parser import Parser
 from ast_1 import (
     BinOp, Number, UnaryOp, Boolean, Var, VarAssign, VarReassign, Block,
-    If, While, For, Read, Print, FuncDef, FuncCall, Return,String
+    If, While, For, Read, Print, FuncDef, FuncCall, Return,String,ArrayAssign,Array,ArrayAccess
 )
 import traceback
 import sys
@@ -152,6 +152,58 @@ class Interpreter:
     def visit_Return(self, node: Return, env):
         """Handles return statements by wrapping the return value."""
         return Return(self.visit(node.expr, env))
+    
+    
+    def visit_Array(self, node: Array, env):
+        """Evaluates an array literal by evaluating all its elements."""
+        return [self.visit(element, env) for element in node.elements]
+
+    def visit_ArrayAccess(self, node: ArrayAccess, env):
+        """Evaluates array access (e.g., arr[1]) by retrieving the value at the index."""
+        array_name = node.array  # Expecting a variable name
+
+        if array_name not in env.variables:  # ✅ Fix: Check in env.variables
+            raise NameError(f"Undefined array: {array_name}")
+
+        array = env.get(array_name)  # ✅ Use env.get() to retrieve the array
+        index = self.visit(node.index, env)
+
+        if not isinstance(array, list):
+            raise TypeError(f"Cannot index non-array type: {type(array).__name__}")
+
+        if not isinstance(index, int):
+            raise TypeError(f"Array index must be an integer, got {type(index).__name__}")
+
+        if index < 0 or index >= len(array):
+            raise IndexError(f"Array index {index} out of bounds")
+
+        return array[index]
+
+    def visit_ArrayAssign(self, node: ArrayAssign, env):
+        """Evaluates array assignment (e.g., arr[1] = 5) by modifying the array at the given index."""
+        array_name = node.array  # Expecting a variable name
+
+        if array_name not in env.variables:  # ✅ Fix: Check in env.variables
+            raise NameError(f"Undefined array: {array_name}")
+
+        array = env.get(array_name)  # ✅ Use env.get() to retrieve the array
+        index = self.visit(node.index, env)
+        value = self.visit(node.value, env)
+
+        if not isinstance(array, list):
+            raise TypeError(f"Cannot assign to non-array type: {type(array).__name__}")
+
+        if not isinstance(index, int):
+            raise TypeError(f"Array index must be an integer, got {type(index).__name__}")
+
+        if index < 0 or index >= len(array):
+            raise IndexError(f"Array index {index} out of bounds")
+
+        # ✅ Fix: Update the array directly inside env.variables
+        env.variables[array_name][index] = value
+
+        return value  # Returning value for confirmation
+
 
     def visit(self, node, env):
         """Dispatch method to visit the correct node type."""
