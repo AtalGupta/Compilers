@@ -98,7 +98,7 @@ while (x < 10) {
 
 #### **For Loops**
 ```plaintext
-for (i in 1 to 10) {
+for i = 1 to 10 {
     print i
 }
 ```
