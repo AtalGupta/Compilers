@@ -102,6 +102,25 @@ class FuncCall(AST):
     args: List[AST]
 
 @dataclass
+class Array(AST):
+    """Represents an array literal in the AST"""
+    elements: list[AST]
+
+@dataclass
+class ArrayAccess(AST):
+    """Represents accessing an array element (e.g., arr[0])"""
+    array: AST
+    index: AST
+
+@dataclass
+class ArrayAssign(AST):
+    """Represents assigning a value to an array index (e.g., arr[1] = 5)"""
+    array: AST
+    index: AST
+    value: AST
+
+
+@dataclass
 class Print(AST):
     """Print an expression"""
     expr: AST         # Expression to print
