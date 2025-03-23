@@ -35,6 +35,8 @@ ELSE       = 'ELSE'
 WHILE      = 'WHILE'
 LBRACE     = 'LBRACE'
 RBRACE     = 'RBRACE'
+LBRACKET   = 'LBRACKET'
+RBRACKET   = 'RBRACKET'
 COMMA      = 'COMMA'
 
 # New tokens for for loop
@@ -197,6 +199,12 @@ class Lexer:
             if self.current_char == ')':
                 self.advance()
                 return Token(RPAREN, ')')
+            if self.current_char == '[':
+                self.advance()
+                return Token(LBRACKET, '[')
+            if self.current_char == ']':
+                self.advance()
+                return Token(RBRACKET, ']')
             if self.current_char == '{':
                 self.advance()
                 return Token(LBRACE, '{')
