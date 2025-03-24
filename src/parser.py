@@ -1,303 +1,472 @@
-# parser.py
-from lexer import (Lexer, Token, LET, ASSIGN, IDENTIFIER, EQUALS, TRUE, FALSE,
-                   PLUS, MINUS, MULTIPLY, DIVIDE, EXPONENT, REM, QUOT, LPAREN, RPAREN,
-                   LT, LTE, GT, GTE, EQEQ, NOTEQ, AND, OR, NOT, EOF, INTEGER, FLOAT,
-                   IF, ELSE, WHILE, LBRACE, RBRACE, FOR, TO, READ, PRINT,COMMA,FUNC,RETURN,STRING,LBRACKET,RBRACKET)
-from ast_1 import (AST, BinOp, Number, UnaryOp, Boolean, Var, VarAssign, VarReassign,
-                   Block, If, While, For, Read, Print, print_ast,FuncCall,FuncDef,Return,String,Array,ArrayAccess,ArrayAssign)
+from lexer import (Lexer, Token, LET, IF, WHILE, FOR, FUNC, RETURN, PRINT, ELSE, ASSIGN, EQUALS,
+                  PLUS, MINUS, MULTIPLY, DIVIDE, EXPONENT, REM, QUOT, LPAREN, RPAREN, LBRACE, RBRACE,
+                  LT, GT, LTE, GTE, EQEQ, NOTEQ, AND, OR, NOT, COMMA, LBRACKET, RBRACKET, COLON,
+                  IDENTIFIER, INTEGER, FLOAT, STRING, TRUE, FALSE, EOF, TO, IN, REPEAT, UNTIL, MATCH, ARROW, QUESTION_MARK, STEP)
+from ast_1 import (AST, BinOp, UnaryOp, Integer, Float, String, Boolean, Var, VarAssign, VarReassign, Block,
+                  If, While, For, FuncDef, Return, FuncCall, Print, Array, Dict, ConditionalExpr,
+                  RepeatUntil, Match, MatchCase, AstPrinter, Lambda,ArrayAccess,ArrayAssign)
+
+class ParseError(Exception):
+    pass
 
 class Parser:
     def __init__(self, lexer: Lexer):
         self.lexer = lexer
-        self.current_token = self.lexer.get_next_token()
+        self.tokens = self._tokenize()
+        self.pos = 0
 
-    def error(self):
-        raise Exception('Invalid syntax')
+    def _tokenize(self):
+        tokens = []
+        while True:
+            token = self.lexer.get_next_token()
+            tokens.append(token)
+            if token.type == EOF:
+                break
+        return tokens
 
-    def eat(self, token_type: str):
-        if self.current_token.type == token_type:
-            self.current_token = self.lexer.get_next_token()
-        else:
-            self.error()
+    def peek(self):
+        if self.pos >= len(self.tokens):
+            return self.tokens[-1]  # EOF
+        return self.tokens[self.pos]
 
-    def block(self) -> Block:
-        """Parses a block of statements within {}"""
-        statements = []
-        self.eat(LBRACE)
-        while self.current_token.type != RBRACE and self.current_token.type != EOF:
-            if self.current_token.type == RETURN:  # Handle return inside function bodies
-                statements.append(self.return_statement())
-            else:
-                statements.append(self.statement())
-        self.eat(RBRACE)
-        return Block(statements)
+    def advance(self):
+        if self.pos < len(self.tokens):
+            token = self.tokens[self.pos]
+            self.pos += 1
+            return token
+        return self.tokens[-1]  # EOF
 
-    def statement(self) -> AST:
-        """Parses a single statement: let, if, while, for, read, print, or assignment"""
-        print(f"Parsing statement: {self.current_token.type,self.current_token.value }")
-        if self.current_token.type == IF:
-            return self.if_statement()
-        elif self.current_token.type == LET:
-            return self.let_statement()
-        elif self.current_token.type == WHILE:
-            return self.while_statement()
-        elif self.current_token.type == FUNC:
-            return self.function_definition()
-        elif self.current_token.type == FOR:
-            return self.for_statement()
-        elif self.current_token.type == READ:
-            self.eat(READ)
-            if self.current_token.type != IDENTIFIER:
-                self.error()
-            target = self.current_token.value
-            self.eat(IDENTIFIER)
-            return Read(target)
-        elif self.current_token.type == PRINT:
-            self.eat(PRINT)
-            expr = self.assignment()
-            return Print(expr) 
-        elif self.current_token.type == IDENTIFIER:
-            var_name = self.current_token.value
-            self.eat(IDENTIFIER)
-            if self.current_token.type == LPAREN:
-                return self.function_call(var_name) 
-            elif self.current_token.type == LBRACKET:
-                node = self.array_access(var_name)  # Parse `arr[index]`
-                if self.current_token.type == ASSIGN:  # Check if it is an assignment
-                    self.eat(ASSIGN)
-                    value = self.assignment()
-                    return ArrayAssign(node.array, node.index, value)  # Create ArrayAssign AST Node
-                return node  # Just an access, not an assignment
-            elif self.current_token.type == ASSIGN:
-                self.eat(ASSIGN)
-                expr_node = self.assignment()
-                return VarReassign(var_name, expr_node)
-            else:
-                self.error()
-        else:
-            return self.assignment()
-    
-    def let_statement(self) -> AST:
-        self.eat(LET)
-        if self.current_token.type != IDENTIFIER:
-            self.error()
-        var_name = self.current_token.value
-        self.eat(IDENTIFIER)
-        self.eat(EQUALS)
-        if self.current_token.type == LBRACKET:
-            expr_node = self.array_literal() 
-        else:
-            expr_node = self.assignment()
-        return VarAssign(var_name, expr_node)
-
-    def if_statement(self) -> AST:
-        self.eat(IF)
-        condition = self.logical_or()
-        then_branch = self.block()
-        else_branch = None
-        if self.current_token.type == ELSE:
-            self.eat(ELSE)
-            else_branch = self.block()
-        return If(condition, then_branch, else_branch)
-
-    def while_statement(self) -> AST:
-        self.eat(WHILE)
-        condition = self.logical_or()
-        body = self.block()
-        return While(condition, body)
-
-    def for_statement(self) -> AST:
-        """Parses 'for var = start to end { body }'"""
-        self.eat(FOR)
-        if self.current_token.type != IDENTIFIER:
-            self.error()
-        var_name = self.current_token.value
-        self.eat(IDENTIFIER)
-        self.eat(EQUALS)
-        start = self.assignment()
-        self.eat(TO)
-        end = self.assignment()
-        body = self.block()
-        return For(var_name, start, end, body)
-    
-    def function_definition(self) -> AST:
-        """Parses function definitions: func name(params) { body }"""
-        self.eat(FUNC)
+    def previous(self):
+        if self.pos > 0:
+            return self.tokens[self.pos - 1]
+        raise ParseError("No previous token available.")
         
-        if self.current_token.type != IDENTIFIER:
-            self.error()
-        func_name = self.current_token.value
-        self.eat(IDENTIFIER)
-
-        self.eat(LPAREN)
-        params = []
-        if self.current_token.type == IDENTIFIER:
-            params.append(self.current_token.value)
-            self.eat(IDENTIFIER)
-            while self.current_token.type == COMMA:
-                self.eat(COMMA)
-                params.append(self.current_token.value)
-                self.eat(IDENTIFIER)
-        self.eat(RPAREN)
-
-        body = self.block()
-        return FuncDef(func_name, params, body)
-
-    def return_statement(self) -> AST:
-        """Parses return statements"""
-        self.eat(RETURN)
-        return Return(self.assignment())
-    
-    def function_call(self, name: str) -> AST:
-        """Parses function calls: name(args)"""
-        self.eat(LPAREN)
-        args = []
-        if self.current_token.type != RPAREN:  # Ensure we allow empty argument lists
-            while True:
-                args.append(self.assignment())  # Correctly parse expressions as arguments
-                if self.current_token.type != COMMA:
-                    break
-                self.eat(COMMA)
-        self.eat(RPAREN)
-        return FuncCall(name, args)
-    
-    def array_literal(self):
-        elements = []
-        self.eat(LBRACKET)
+    def check(self, token_type):
+        """Check if the current token matches the given type without advancing."""
+        return self.peek().type == token_type
         
-        if self.current_token.type != RBRACKET:  
-            elements.append(self.assignment())
-            while self.current_token.type == COMMA:
-                self.eat(COMMA)
-                elements.append(self.assignment())
+    def is_at_end(self):
+        """Check if we've reached the end of the token stream."""
+        return self.peek().type == EOF
 
-        self.eat(RBRACKET)
-        return Array(elements)
+    def match(self, *types):
+        if self.peek().type in types:
+            return self.advance()
+        return None
 
-    
-    def array_access(self, var_name):
-        self.eat(LBRACKET)
-        index = self.assignment()
-        self.eat(RBRACKET)
-        return ArrayAccess(var_name, index)
+    def consume(self, token_type: str, message: str):
+        if self.peek().type == token_type:
+            return self.advance()
+        raise self.error(self.peek(), message)
 
+    def error(self, token: Token, message: str):
+        error_msg = f"[line {token.line}] Error at '{token.value}': {message}"
+        print(error_msg)
+        return ParseError(error_msg)
 
-
-
-    def assignment(self) -> AST:
-        node = self.logical_or()
-        if self.current_token.type == ASSIGN:
-            if isinstance(node, ArrayAccess):  # Handle arr[index] assign value
-                return ArrayAssign(node.array, node.index, self.assignment())
-            elif not isinstance(node, Var):
-                self.error()
-            self.eat(ASSIGN)
-            node = VarReassign(name=node.name, value=self.assignment())
-        return node
-
-    def logical_or(self) -> AST:
-        node = self.logical_and()
-        while self.current_token.type == OR:
-            token = self.current_token
-            self.eat(OR)
-            node = BinOp(left=node, op=token.value, right=self.logical_and())
-        return node
-
-    def logical_and(self) -> AST:
-        node = self.logical_not()
-        while self.current_token.type == AND:
-            token = self.current_token
-            self.eat(AND)
-            node = BinOp(left=node, op=token.value, right=self.logical_not())
-        return node
-
-    def logical_not(self) -> AST:
-        if self.current_token.type == NOT:
-            token = self.current_token
-            self.eat(NOT)
-            return UnaryOp(token.value, self.logical_not())
-        return self.comparison()
-
-    def comparison(self) -> AST:
-        node = self.arithmetic()
-        if self.current_token.type in (EQEQ, NOTEQ, LT, LTE, GT, GTE):
-            token = self.current_token
-            self.eat(token.type)
-            node = BinOp(left=node, op=token.value, right=self.arithmetic())
-        return node
-
-    def arithmetic(self) -> AST:
-        node = self.term()
-        while self.current_token.type in (PLUS, MINUS):
-            token = self.current_token
-            self.eat(token.type)
-            node = BinOp(left=node, op=token.value, right=self.term())
-        return node
-
-    def term(self) -> AST:
-        node = self.power()
-        while self.current_token.type in (MULTIPLY, DIVIDE, REM, QUOT):
-            token = self.current_token
-            self.eat(token.type)
-            node = BinOp(left=node, op=token.value, right=self.power())
-        return node
-
-    def power(self) -> AST:
-        node = self.factor()
-        if self.current_token.type == EXPONENT:
-            token = self.current_token
-            self.eat(EXPONENT)
-            node = BinOp(left=node, op=token.value, right=self.power())
-        return node
-
-    def factor(self) -> AST:
-        token = self.current_token
-        print(f"Parsing factor: {token.type}, value: {token.value}")
-        if token.type in (PLUS, MINUS):
-            self.eat(token.type)
-            return UnaryOp(token.value, self.factor())
-        elif token.type == INTEGER:
-            self.eat(INTEGER)
-            return Number(token.value)
-        elif token.type == FLOAT:
-            self.eat(FLOAT)
-            return Number(token.value)
-        elif token.type == STRING:
-            string_value = token.value 
-            self.eat(STRING)
-            return String(string_value) 
-        elif token.type == TRUE:
-            self.eat(TRUE)
-            return Boolean(True)
-        elif token.type == FALSE:
-            self.eat(FALSE)
-            return Boolean(False)
-        elif token.type == LBRACKET:
-            return self.array_literal()
-        elif token.type == IDENTIFIER:
-            var_name = token.value
-            self.eat(IDENTIFIER)
-            if self.current_token.type == LBRACKET:  
-                return self.array_access(var_name)
-            elif self.current_token.type == LPAREN:  # Function call only if no brackets
-                return self.function_call(var_name)
-
-            return Var(var_name)  
-        elif token.type == LPAREN:
-            self.eat(LPAREN)
-            node = self.assignment()
-            self.eat(RPAREN)
-            return node
-        elif token.type == READ:
-            self.eat(READ)
-            return Read(None)  # Create a Read node without a target
-        else:
-            self.error()
-
+    def synchronize(self):
+        self.advance()
+        while self.peek().type != EOF:
+            if self.previous().type == RBRACE or self.peek().type in (
+                LET, IF, WHILE, FOR, FUNC, RETURN, PRINT, REPEAT, MATCH
+            ):
+                return
+            self.advance()
 
     def parse(self) -> Block:
         statements = []
-        while self.current_token.type != EOF:
-            statements.append(self.statement())
-        print(statements)
+        while self.peek().type != EOF:
+            try:
+                stmt = self.statement()
+                if stmt:
+                    statements.append(stmt)
+            except ParseError:
+                self.synchronize()
         return Block(statements)
+
+    def statement(self) -> AST:
+        if self.peek().type == LET:
+            return self.let_statement()
+        if self.peek().type == IF:
+            return self.if_statement()
+        if self.peek().type == WHILE:
+            return self.while_statement()
+        if self.peek().type == FOR:
+            return self.for_statement()
+        if self.peek().type == REPEAT:
+            return self.repeat_statement()
+        if self.peek().type == MATCH:
+            return self.match_statement()
+        if self.peek().type == FUNC:
+            return self.function_definition()
+        if self.peek().type == RETURN:
+            return self.return_statement()
+        if self.peek().type == PRINT:
+            return self.print_statement()
+        if self.peek().type == IDENTIFIER:
+            var_name = self.peek().value
+            token = self.consume(IDENTIFIER, "Expected an identifier")
+
+            if self.peek().type == LBRACKET:
+                node = self.array_access(var_name)  # Now node is `ArrayAccess`
+                
+                if self.peek().type == ASSIGN:  # Check for assignment
+                    self.consume(ASSIGN, "Expected '=' in array assignment")
+                    value = self.assignment()
+                    return ArrayAssign(node.array, node.index, value) 
+                
+                return node  
+
+            elif self.peek().type == ASSIGN: 
+                self.consume(ASSIGN, "Expected '=' in variable assignment")
+                value = self.assignment()
+                return VarReassign(var_name, value, token)
+
+            return Var(var_name, token) 
+
+
+        return self.expression_statement()
+
+    def let_statement(self) -> VarAssign:
+        self.advance()  # Consume 'let'
+        name_token = self.consume(IDENTIFIER, "Expected variable name after 'let'")
+        self.consume(EQUALS, "Expected '=' after variable name")
+        value = self.expression()  # Use expression for flexibility
+        return VarAssign(name_token.value, value, name_token)
+
+    def if_statement(self) -> If:
+        self.advance()  # Consume 'if'
+        self.consume(LPAREN, "Expected '(' after 'if'")
+        condition = self.expression()
+        self.consume(RPAREN, "Expected ')' after condition")
+        then_branch = self.block()
+        else_branch = None
+        if self.peek().type == ELSE:
+            self.advance()  # Consume 'else'
+            else_branch = self.block()
+        return If(condition, then_branch, else_branch)
+
+    def while_statement(self) -> While:
+        self.advance()  # Consume 'while'
+        self.consume(LPAREN, "Expected '(' after 'while'")
+        condition = self.expression()
+        self.consume(RPAREN, "Expected ')' after condition")
+        body = self.block()
+        return While(condition, body)
+
+    def for_statement(self) -> For:
+        self.advance()  # Consume 'for'
+        self.consume(LPAREN, "Expected '(' after 'for'")
+        
+        # Parse the variable declaration
+        self.consume(LET, "Expected 'let' after 'for ('")
+        name_token = self.consume(IDENTIFIER, "Expected variable name")
+        self.consume(EQUALS, "Expected '=' after variable name")
+        start = self.expression()
+        
+        # Parse the 'to' keyword and end expression
+        self.consume(TO, "Expected 'to' after start expression")
+        end = self.expression()
+        
+        # Handle optional step parameter
+        step = None
+        if self.match(STEP):
+            step = self.expression()
+        
+        # Consume the closing parenthesis
+        self.consume(RPAREN, "Expected ')' after for loop header")
+        
+        # Parse the body
+        body = self.block()
+        
+        return For(name_token.value, start, end, body, step)
+
+    def repeat_statement(self) -> RepeatUntil:
+        self.advance()  # Consume 'repeat'
+        body = self.block()
+        self.consume(UNTIL, "Expected 'until' after repeat block")
+        self.consume(LPAREN, "Expected '(' after 'until'")
+        condition = self.expression()
+        self.consume(RPAREN, "Expected ')' after condition")
+        return RepeatUntil(body, condition)
+
+    def match_statement(self) -> Match:
+        self.advance()  # Consume 'match'
+        expr = self.expression()
+        self.consume(LBRACE, "Expected '{' after match expression")
+        cases = []
+        while self.peek().type != RBRACE:
+            pattern = self.pattern()
+            self.consume(ARROW, "Expected '->' after pattern")
+            body = self.statement()  # Parse as statement instead of expression
+            cases.append(MatchCase(pattern, body))
+            if self.peek().type != RBRACE:
+                self.consume(COMMA, "Expected ',' between match cases or '}' to end")
+        self.consume(RBRACE, "Expected '}' after match cases")
+        return Match(expr, cases)
+
+    def function_definition(self) -> FuncDef:
+        self.advance()  # Consume 'func'
+        name_token = self.consume(IDENTIFIER, "Expected function name after 'func'")
+        self.consume(LPAREN, "Expected '(' after function name")
+        params = []
+        if self.peek().type != RPAREN:
+            params.append(self.consume(IDENTIFIER, "Expected parameter name").value)
+            while self.match(COMMA):
+                params.append(self.consume(IDENTIFIER, "Expected parameter name after ','").value)
+        self.consume(RPAREN, "Expected ')' after parameters")
+        body = self.block()
+        return FuncDef(name_token.value, params, body, token=name_token)  # Pass token with explicit name
+
+    def return_statement(self) -> Return:
+        token = self.advance()  # Consume 'return'
+        expr = self.expression()
+        return Return(expr, token=token)  # Pass the return token for error reporting
+
+    def print_statement(self) -> Print:
+        self.advance()  # Consume 'print'
+        expr = self.expression()
+        return Print(expr)
+    
+    def array_literal(self):
+        """Parse array literals like [1, 2, 3]"""
+        elements = []
+        self.consume(LBRACKET, "Expected '[' to start array")
+
+        if self.peek().type != RBRACKET:  # If not an empty array
+            elements.append(self.assignment())
+            while self.match(COMMA):
+                elements.append(self.assignment())
+
+        self.consume(RBRACKET, "Expected ']' after array elements")
+        return Array(elements)
+    
+    def array_access(self, var_name):
+        """Parse array indexing like arr[0]"""
+        self.consume(LBRACKET, "Expected '[' after array name")
+        index = self.assignment()
+        self.consume(RBRACKET, "Expected ']' after array index")
+        return ArrayAccess(var_name, index) 
+
+    def block(self) -> Block:
+        self.consume(LBRACE, "Expected '{' to start block")
+        statements = []
+        while self.peek().type not in (RBRACE, EOF):
+            stmt = self.statement()
+            if stmt:
+                statements.append(stmt)
+        self.consume(RBRACE, "Expected '}' to end block")
+        return Block(statements)
+
+    def pattern(self) -> AST:
+        if self.match(INTEGER):
+            return Integer(self.previous().value)
+        if self.match(FLOAT):
+            return Float(self.previous().value)
+        if self.match(STRING):
+            return String(self.previous().value)
+        if self.match(TRUE):
+            return Boolean(True)
+        if self.match(FALSE):
+            return Boolean(False)
+        if self.match(LBRACKET):
+            elements = []
+            if self.peek().type != RBRACKET:
+                elements.append(self.expression())
+                while self.match(COMMA):
+                    elements.append(self.expression())
+            self.consume(RBRACKET, "Expected ']' after array elements")
+            return Array(elements)
+        raise self.error(self.peek(), "Expected pattern (integer, float, string, boolean, or array)")
+        
+    def lambda_expression(self) -> Lambda:
+        """Parse an anonymous function: func(param1, param2, ...) { body }"""
+        token = self.previous()  # The 'func' token
+        
+        self.consume(LPAREN, "Expected '(' after 'func'")
+        parameters = []
+        
+        # Parse parameters
+        if not self.check(RPAREN):
+            parameters.append(self.consume(IDENTIFIER, "Expected parameter name").value)
+            while self.match(COMMA):
+                parameters.append(self.consume(IDENTIFIER, "Expected parameter name").value)
+        
+        self.consume(RPAREN, "Expected ')' after parameters")
+        
+        # Parse body (a block)
+        body = self.block()
+        
+        return Lambda(parameters, body, token)
+
+    def assignment(self) -> AST:
+        expr = self.conditional()
+        if self.match(ASSIGN):
+            assign_token = self.previous()
+            if isinstance(expr, Var):
+                value = self.assignment()  # Recurse for chained assignments (e.g., x = y = 5)
+                return VarReassign(expr.name, value, assign_token)
+            raise self.error(assign_token, "Invalid assignment target")
+        return expr
+
+    def expression_statement(self) -> AST:
+        expr = self.assignment()
+        return expr
+    
+    def conditional(self) -> AST:
+        expr = self.logic_or()
+        if self.match(QUESTION_MARK):
+            then_expr = self.expression()
+            self.consume(COLON, "Expected ':' in conditional expression")
+            else_expr = self.conditional()
+            return ConditionalExpr(expr, then_expr, else_expr)
+        return expr
+
+    def logic_or(self) -> AST:
+        expr = self.logic_and()
+        while self.match(OR):
+            op = self.previous()
+            right = self.logic_and()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def logic_and(self) -> AST:
+        expr = self.equality()
+        while self.match(AND):
+            op = self.previous()
+            right = self.equality()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def equality(self) -> AST:
+        expr = self.comparison()
+        while self.match(EQEQ, NOTEQ):
+            op = self.previous()
+            right = self.comparison()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def comparison(self) -> AST:
+        expr = self.term()
+        while self.match(LT, GT, LTE, GTE):
+            op = self.previous()
+            right = self.term()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def term(self) -> AST:
+        expr = self.factor()
+        while self.match(PLUS, MINUS):
+            op = self.previous()
+            right = self.factor()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def factor(self) -> AST:
+        expr = self.power()
+        while self.match(MULTIPLY, DIVIDE, REM, QUOT):
+            op = self.previous()
+            right = self.power()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def power(self) -> AST:
+        expr = self.unary()
+        while self.match(EXPONENT):
+            op = self.previous()
+            right = self.unary()
+            expr = BinOp(expr, op, right)
+        return expr
+
+    def unary(self) -> AST:
+        if self.match(MINUS, NOT):
+            op = self.previous()
+            right = self.unary()
+            return UnaryOp(op, right)
+        return self.call()
+
+    def call(self) -> AST:
+        expr = self.primary()
+        while self.match(LPAREN):
+            args = []
+            if self.peek().type != RPAREN:
+                args.append(self.expression())
+                while self.match(COMMA):
+                    args.append(self.expression())
+            token = self.consume(RPAREN, "Expected ')' after arguments")
+            expr = FuncCall(expr, args, token=token)  # Pass token for error reporting
+        return expr
+
+    def primary(self) -> AST:
+        if self.match(INTEGER):
+            return Integer(self.previous().value)
+        if self.match(FLOAT):
+            return Float(self.previous().value)
+        if self.match(STRING):
+            return String(self.previous().value)
+        if self.match(TRUE):
+            return Boolean(True)
+        if self.match(FALSE):
+            return Boolean(False)
+        if self.match(FUNC):
+            return self.lambda_expression()
+        if self.match(IDENTIFIER):
+            ident_token = self.previous()
+            expr = Var(ident_token.value, ident_token)
+
+            while self.match(LBRACKET):  # Handle array indexing
+                index = self.expression()
+                self.consume(RBRACKET, "Expected ']' after index")
+                expr = ArrayAccess(expr, index)
+            return expr
+        if self.match(LPAREN):
+            expr = self.expression()
+            self.consume(RPAREN, "Expected ')' after expression")
+            return expr
+        if self.match(LBRACKET):
+            elements = []
+            if self.peek().type != RBRACKET:
+                elements.append(self.expression())
+                while self.match(COMMA):
+                    elements.append(self.expression())
+            self.consume(RBRACKET, "Expected ']' after array elements")
+            return Array(elements)
+        if self.match(LBRACE):
+            pairs = []
+            if self.peek().type != RBRACE:
+                key = self.expression()
+                self.consume(COLON, "Expected ':' after dict key")
+                value = self.expression()
+                pairs.append((key, value))
+                while self.match(COMMA):
+                    key = self.expression()
+                    self.consume(COLON, "Expected ':' after dict key")
+                    value = self.expression()
+                    pairs.append((key, value))
+            self.consume(RBRACE, "Expected '}' after dict pairs")
+            return Dict(pairs)
+        raise self.error(self.peek(), "Expected expression")
+
+    def expression(self) -> AST:
+        return self.assignment()
+
+def parse_code(code: str) -> Block:
+    lexer = Lexer(code)
+    parser = Parser(lexer)
+    ast = parser.parse()
+    printer = AstPrinter()
+    print(printer.print(ast))
+    return ast
+
+if __name__ == "__main__":
+    code = """
+    let x = 5
+    let y = 10
+    if (x > 0) {
+        print x
+    }
+    else{
+        print y
+    }
+    """
+    parse_code(code)
