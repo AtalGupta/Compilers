@@ -1,186 +1,179 @@
-# Compilers
+# Getting Started with FS
 
-## Authors
-- **Atal Gupta**  
-- **Ajith Boddu**  
-- **Karna Pardheev Sai**  
+## Overview
+This guide introduces the syntax and key features of your high-level, dynamically typed, functional programming language. The language is designed for usability, expressiveness, and competitive programming, with a focus on functional programming principles.
 
----
-
-## 📜 Documentation
-
-###  Syntax
-Our language provides a simple yet powerful syntax to write expressive and efficient programs.
-
-### 🧮 Data Types
-Our language has two built-in data types:
-- **Numbers**: Integers or floating-point values (e.g., `10`, `3.14`).
+## Data Types
+### Primitive Data Types
+- **Numbers**: Integers or floating-point values.
+  - Example:
+    ```
+    let a = 10
+    let b = 3.14
+    ```
 - **Booleans**: `True` and `False`.
+  - Example:
+    ```
+    let is_valid = True
+    ```
+- **Strings**: Enclosed in double quotes.
+  - Example:
+    ```
+    let message = "Hello, World!"
+    ```
+- **Arrays**: Ordered, mutable collections.
+  - Example:
+    ```
+    let numbers = [1, 2, 3]
+    ```
+### Desirable Data Types
+- **Dictionaries**: Key-value mappings.
+  - Example:
+    ```
+    let person = { "name": "Alice", "age": 25 }
+    ```
 
-### 🏷️ Variables
-Variables are dynamically typed and can be assigned values of any type. Use `let` to declare variables:
-```plaintext
-let x = 10
+## Variables
+- **Declaration**:
+  ```
+  let x = 10
+  ```
+- **Reassignment**:
+  ```
+  x assign 20
+  ```
+- **Scope**: Variables are lexically scoped within their block or function.
+
+## Operators
+### Arithmetic Operators
 ```
-
-###  Operators
-####  Arithmetic Operators
-| Operator | Description |
-|----------|------------|
-| `+` | Addition |
-| `-` | Subtraction |
-| `*` | Multiplication |
-| `**` | Exponentiation |
-| `/` | Division |
-| `rem` | Remainder |
-| `quot` | Integer division |
-
-Example:
-```plaintext
-10 + 5 * 2
+let sum = 10 + 5
+let power = 2 ** 3
+let remainder = 10 rem 3
 ```
-
-####  Comparison Operators
-| Operator | Description |
-|----------|------------|
-| `<` | Less than |
-| `>` | Greater than |
-| `<=` | Less than or equal to |
-| `>=` | Greater than or equal to |
-| `==` | Equal to |
-| `!=` | Not equal to |
-
-Example:
-```plaintext
-10 < 20
+### Comparison Operators
 ```
-
-####  Logical Operators
-| Operator | Description |
-|----------|------------|
-| `and` | Logical AND |
-| `or` | Logical OR |
-| `not` | Logical NOT |
-
-Example:
-```plaintext
-True and False
+let result = 10 < 20  # True
 ```
-
-####  Assignment Operators
-| Operator | Description |
-|----------|------------|
-| `let` | Variable declaration |
-| `assign` | Variable reassignment |
-
-Example:
-```plaintext
-let x = 10
-x assign 20
+### Logical Operators
 ```
+let check = True and not False  # True
+```
+### Assignment Operators
+- `let` (declaration), `assign` (reassignment)
+- Example:
+  ```
+  let x = 10
+  x assign x + 1
+  ```
 
-###  Control Flow
-#### **If Statements**
-```plaintext
-if (a < b) {
-    x = 10
+## Control Flow
+### If Statements
+```
+if (x < 0) {
+    print "Negative"
 } else {
-    x = 20
+    print "Non-negative"
 }
 ```
-
-#### **While Loops**
-```plaintext
-while (x < 10) {
-    x = x + 1
+### Loops
+#### While Loop
+```
+let x = 0
+while (x < 5) {
+    print x
+    x assign x + 1
 }
 ```
-
-#### **For Loops**
-```plaintext
-for i = 1 to 10 {
+#### For Loop
+```
+for (let i = 1 to 5) {
     print i
 }
 ```
-
-#### **Repeat Loops**
-```plaintext
+#### Repeat Loop
+```
+let x = 0
 repeat {
-    x = x + 1
-} until (x == 10)
+    x assign x + 1
+} until (x == 5)
 ```
 
-### Print Statements
-```plaintext
-print("Hello, world!")
+## Pattern Matching
+```
+let arr = [1, 2, 3]
+match arr {
+    [] -> "Empty",
+    [head, *tail] -> head + match tail { [] -> 0, [h, *t] -> h + match t }
+}
 ```
 
-###  Functions
-Functions are defined using the `func` keyword:
-```plaintext
+## Functions
+### Function Definition
+```
 func add(a, b) {
     return a + b
 }
 ```
-
----
-
-##  Arithmetic Expressions
-
-Our compiler supports:
-- **Addition (`+`)**
-- **Subtraction (`-`)**
-- **Multiplication (`*`)**
-- **Exponentiation (`**`)**
-- **Division (`/`)**
-- **Remainder (`rem`)**
-- **Integer Division (`quot`)**
-
-### 🔢 Operator Precedence
-1. **Parentheses `()`** (Highest priority)
-2. **Exponentiation `**`** (Right-associative)
-3. **Multiplication `*`, Division `/`, Remainder `rem`, Integer Division `quot`** (Left to right)
-4. **Addition `+`, Subtraction `-`** (Left to right)
-
-### 🚨 Error Handling
-Our compiler includes robust error handling:
-- **Division by zero** → Raises `ZeroDivisionError`
-- **Malformed expressions** → Flags `SyntaxError`
-
----
-
-### Arrays
-Arrays are collections of elements of the same type.
-#### **Declaring Arrays**
-```plaintext
-let arr = [1, 2, 3, 4]
+### First-Class Functions
 ```
-#### **Accessing Elements**
-```plaintext
-let x = arr[1]  # Gets the second element (indexing starts at 0)
+let double = func(x) { return x * 2 }
+print double(5)  # Outputs: 10
 ```
-#### **Modifying Elements**
-```plaintext
-arr[2] assign 10  # Changes third element to 10
+### Closures
+```
+func counter() {
+    let count = 0
+    return func() {
+        count assign count + 1
+        return count
+    }
+}
+let c = counter()
+print c()  # 1
+print c()  # 2
+```
+### Tail-Call Optimization
+```
+func factorial(n, acc = 1) {
+    if (n <= 1) {
+        return acc
+    }
+    return factorial(n - 1, n * acc)
+}
+print factorial(1000)  # Works without stack overflow
 ```
 
-
-### ✅ **Feel free to contribute and improve this project!** 🚀
-
-
-
-
-## Developer's Guide
-Test Lexer code
-go to that folder and then use command
+## Conditional Expressions
 ```
-python -m unittest test_lexer.py
-
+let max = a if a > b else b
 ```
 
+## Error Handling
+The language provides good error messages and a REPL that doesn’t crash on errors.
+- Example REPL session:
+  ```
+  > let x = 10 / 0
+  ZeroDivisionError: Division by zero at line 1. Suggestion: Ensure divisor is non-zero.
+  > print x
+  Undefined variable 'x' at line 2. Suggestion: Define 'x' before use.
+  ```
 
-normal test can be done using
+## Compilation
+The language compiles to bytecode for execution, ensuring efficient runtime performance.
+
+## Example Program
 ```
-python src/evaluator.py tests/sample_test.og
+func fib(n) {
+    if (n <= 1) {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+let x = 10
+print "Fibonacci of " + x + " is " + fib(x)
 ```
+
+This guide provides a comprehensive introduction to the language's syntax and features. Happy coding!
 
